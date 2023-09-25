@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
+  NotFoundException,
 } from "@nestjs/common";
 import { UserService } from "../users/users.service";
 import { UserModel } from "src/users/models/create-user.model";
@@ -12,25 +13,39 @@ import {
   UserAuthenticationErrorModel,
   UserAuthenticationModel,
 } from "./model/auth-model";
-import * as jwt from "jsonwebtoken";
+import { JwtModule, JwtService } from "@nestjs/jwt";
 
 @Injectable()
 @ApiTags("Authentication")
 export class AuthService {
   constructor(
     private usersService: UserService,
-    private databaseService: DbService
+    private databaseService: DbService,
+    private jwtService: JwtService
   ) {}
 
   async login(userLogin: UserAuthenticationModel) {
     const user = await this.userValidate(userLogin);
-    return this.generateToken(user);
+    if (!user) {
+      throw new NotFoundException("Пользователь не найден");
+    }
+
+    const token = await this.generateToken(user);
+    
+    //возвращаемые данные по модели при успешком логине
+    const userResponse = {
+      id: user.id, 
+      email: user.email, 
+      token,
+    };
+
+    return userResponse;
   }
 
   async registration(user: UserAuthenticationModel) {
-    try {
+    try {  
       const userResult = await this.usersService.createUser(user);
-
+  
       if (userResult.Status == "Success") {
         return {
           token: await this.generateToken(userResult.Data),
@@ -43,31 +58,30 @@ export class AuthService {
       throw new BadRequestException("Ошибка при создании пользователя:", error);
     }
   }
+  
 
-
-
-
-//// Вспомогательные функции
+  //// Вспомогательные функции
   private async generateToken(user: UserModel) {
     const payload = { sub: user.id, email: user.email };
-    const secret = process.env.PRIVATE_KEY;
-    const options = { expiresIn: "1h" };
-
-    return jwt.sign(payload, secret, options);
+    return this.jwtService.sign(payload)
   }
 
-  private async userValidate(user: UserAuthenticationModel) {
+  private async userValidate(userValidate: UserAuthenticationModel) {
     const query = `
-      SELECT email, password FROM public.users WHERE email = $1
+      SELECT * FROM public.users WHERE email = $1
     `;
-    const params = [user.email];
+    const params = [userValidate.email];
 
     try {
-      const userQuery = await this.databaseService.query( query, params );
-      const storedPasswordHash = userQuery.rows[0].password;      
-      const passwordEquals = bcrypt.compareSync(user.password, storedPasswordHash)
-      if (userQuery && passwordEquals) {
-        return userQuery;
+      const queryResult = await this.databaseService.query(query, params);
+
+      const userExist: UserModel = queryResult.rows[0];
+      const passwordEquals = bcrypt.compareSync(
+        userValidate.password,
+        userExist.password
+      );
+      if (userExist && passwordEquals) {
+        return userExist;
       } else {
         throw Error;
       }
@@ -75,4 +89,5 @@ export class AuthService {
       throw new UnauthorizedException({ message: "Не веный Email или пароль" });
     }
   }
+  
 }

@@ -78,7 +78,7 @@ export class UserService {
       `;
       const params = [userId];
       const result = await this.databaseService.query(query, params);
-      return result;
+      return result.rows[0];
     } catch (err) {
       throw new BadRequestException("Пользователь не найден");
     }

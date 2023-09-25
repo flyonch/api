@@ -7,3 +7,8 @@ export class UserModel {
     @ApiProperty({example: '12345678', description: 'Пароль'})
     readonly password: string;
 }
+
+export class UserProfile {
+    readonly id: number;
+    readonly email: string;
+}

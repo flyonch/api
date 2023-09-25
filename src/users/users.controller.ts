@@ -1,7 +1,8 @@
-import { Controller, Body, Post, Get , UseGuards} from '@nestjs/common';
+import { Controller, Body, Post, Get , UseGuards,Req} from '@nestjs/common';
 import { UserService } from './users.service';
-import { UserModel } from './models/create-user.model';
+import { UserModel, UserProfile } from './models/create-user.model';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
 
 
 @ApiTags('Users')
@@ -13,8 +14,20 @@ export class UsersController {
     @ApiOperation({summary: 'Создание пользователя'})
     @ApiResponse({status: 200})
 
-    @Post()
-    create(@Body() user: UserModel) {
+    @UseGuards(JwtAuthGuard)
+    @Post('create')
+    create(@Body() user: UserModel, @Req() req) {
         return this.userService.createUser(user)
     }
+
+    @UseGuards(JwtAuthGuard)
+    @Get('me')
+    async getMySelfUser(@Req() req) {
+        const userResult: UserProfile = await this.userService.getUserById(req.userProfile.id)
+        return {
+            "useId": userResult.id,
+            "email": userResult.email
+        }
+    }
+
 }
